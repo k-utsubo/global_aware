@@ -3,21 +3,27 @@ import numpy as np
 import torch
 
 
-def gen_bt(bs, tokenizer, mode, dataset='cnndm', shuffle=False, ml=1024, peg=False):
-    data = [json.loads(i) for i in open('{}/{}.json'.format(dataset, mode), encoding='utf8')]
-    tgt = [i['tgt'] for i in data]
+def gen_bt(bs, tokenizer, mode, dataset='cnndm', shuffle=False, ml=1024, target_ml=256, peg=False):
+    if dataset in ['cnndm','xsum','newsroom','multi-news','billsum','reddit','wikihow','arxiv','pubmed']:
+        data = [json.loads(i) for i in open('{}/{}.json'.format(dataset, mode), encoding='utf8')]
+        tgt = [i['tgt'] for i in data]
 
-    if dataset == 'cnndm':
-        src = []
-        for i in data:
-            text = i['src']
-            if text[:5] == '(CNN)':
-                text = text[5:]
-                if text[:4] == ' -- ':
-                    text = text[4:]
-            src.append(text)
+        if dataset == 'cnndm':
+            src = []
+            for i in data:
+                text = i['src']
+                if text[:5] == '(CNN)':
+                    text = text[5:]
+                    if text[:4] == ' -- ':
+                        text = text[4:]
+                src.append(text)
+        else:
+            src = [i['src'] for i in data]
     else:
-        src = [i['src'] for i in data]
+        import pandas as pd
+        data = pd.read_csv(dataset)
+        src = data["source"].tolist()
+        tgt = data["target"].tolist()
 
     if shuffle:
         cc = list(zip(src, tgt))
@@ -34,7 +40,7 @@ def gen_bt(bs, tokenizer, mode, dataset='cnndm', shuffle=False, ml=1024, peg=Fal
         target = tgt[begin:stop]
 
         sources = tokenizer(source, return_tensors='pt', max_length=ml, padding=True, truncation=True)
-        targets = tokenizer(target, return_tensors='pt', max_length=256, padding=True, truncation=True)
+        targets = tokenizer(target, return_tensors='pt', max_length=target_ml, padding=True, truncation=True)
         tar_ids = targets['input_ids']
         tar_mask = targets['attention_mask']
         src_ids = sources['input_ids']

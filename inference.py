@@ -1,11 +1,12 @@
 from train_att_prediction import TrainPreAtt
 from transformers import BartForConditionalGeneration, BartTokenizer, PegasusForConditionalGeneration, PegasusTokenizer
+from transformers import MT5ForConditionalGeneration, MT5Tokenizer
 from generate_batch import gen_bt
 import torch
 import argparse
 from att_pred_model import PreAttModel
 import time
-
+import os
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Global-aware Inference')
@@ -45,16 +46,25 @@ args = parse_args()
 def inference(summ, tokenizer, summ_use):
     ckpt = args.ckpt
     model_fix = 'bart'
+    if args.dataset in ['cnndm','xsum','newsroom','multi-news','billsum','reddit','wikihow','arxiv','pubmed']:
+        outdir=args.dataset
+    else:
+        outdir="output"
+    os.makedirs(outdir,exist_ok=True)
+
     ml = 1024
     if args.peg:
         model_fix = 'peg'
         if args.dataset in ['xsum', 'newsroom','wikihow','reddit']:
             ml = 512
-    device = torch.device('cuda:{}'.format(args.cuda))
+    if torch.cuda.is_available():
+        device = torch.device('cuda:{}'.format(args.cuda))
+    else:
+        device = torch.device("cpu")
 
     if args.global_aware:
         print('enter global-aware inference.')
-        pre_att_model =PreAttModel(layers=2, d_model=1024, num_heads=16, dff=4096, rate=0.0)
+        pre_att_model =PreAttModel(layers=2, d_model=summ.config.hidden_size, num_heads=16, dff=4096, rate=0.0)
 
         try:
             pre_att_model.load_state_dict(torch.load(ckpt))
@@ -112,7 +122,7 @@ def inference(summ, tokenizer, summ_use):
                 print(out_list)
 
                 for i in out_list:
-                    with open('{}/global_{}_beta{}_beam{}_ga{}.txt'.format(args.dataset,model_fix, args.beta, args.beam_size, args.gamma),
+                    with open('{}/global_{}_beta{}_beam{}_ga{}.txt'.format(outdir,model_fix, args.beta, args.beam_size, args.gamma),
                               'a', encoding='utf8') as fw:
                         fw.write(' .'.join(i.split('.')).replace('<n>', ' '))
                         fw.write('\n')
@@ -128,7 +138,7 @@ def inference(summ, tokenizer, summ_use):
 
                 for i in out_list:
                     with open(
-                            '{}/vanilla_no_beam{}.txt'.format(args.dataset, args.beam_size),
+                            '{}/vanilla_no_beam{}.txt'.format(outdir, args.beam_size),
                             'a', encoding='utf8') as fw:
                         fw.write(' .'.join(i.split('.')).replace('<n>', ' '))
                         fw.write('\n')
@@ -142,7 +152,7 @@ def inference(summ, tokenizer, summ_use):
                 print(out_list)
 
                 for i in out_list:
-                    with open('{}/vanilla_{}_beam{}.txt'.format(args.dataset, model_fix, args.beam_size),
+                    with open('{}/vanilla_{}_beam{}.txt'.format(outdir, model_fix, args.beam_size),
                               'a', encoding='utf8') as fw:
                         fw.write(' .'.join(i.split('.')).replace('<n>', ' '))
                         fw.write('\n')
@@ -167,7 +177,7 @@ def inference(summ, tokenizer, summ_use):
                             summary_ids]
                 print(out_list)
                 for i in out_list:
-                    with open('{}/oracle_{}_beta{}_beam{}_ga{}.txt'.format(args.dataset, model_fix, args.beta, args.beam_size, args.gamma),
+                    with open('{}/oracle_{}_beta{}_beam{}_ga{}.txt'.format(outdir, model_fix, args.beta, args.beam_size, args.gamma),
                               'a', encoding='utf8') as fw:
                         fw.write(' .'.join(i.split('.')).replace('<n>', ' '))
                         fw.write('\n')
@@ -176,15 +186,15 @@ def inference(summ, tokenizer, summ_use):
 
 
 if __name__ == '__main__':
-    assert args.dataset in ['cnndm','xsum','newsroom','multi-news','billsum','reddit','wikihow','arxiv','pubmed'],\
-        '--dataset should be cnndm, xsum, newsroom, multi-news, billsum, reddit, wikihow, arxiv, pubmed'
+    #assert args.dataset in ['cnndm','xsum','newsroom','multi-news','billsum','reddit','wikihow','arxiv','pubmed'],\
+    #    '--dataset should be cnndm, xsum, newsroom, multi-news, billsum, reddit, wikihow, arxiv, pubmed'
     summ_use = None
     if args.dataset == 'cnndm':
         if not args.peg:
             path = 'facebook/bart-large-cnn'
             summ = BartForConditionalGeneration.from_pretrained(path, use_cache=False)
             tokenizer = BartTokenizer.from_pretrained('facebook/bart-large-cnn')
-    if args.dataset == 'xsum':
+    elif args.dataset == 'xsum':
         if not args.peg:
             path = 'facebook/bart-large-xsum'
             summ = BartForConditionalGeneration.from_pretrained(path, use_cache=False)
@@ -196,7 +206,7 @@ if __name__ == '__main__':
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-xsum')
-    if args.dataset == 'newsroom':
+    elif args.dataset == 'newsroom':
         if not args.peg:
             path = 'facebook/bart-large-cnn'
             summ = BartForConditionalGeneration.from_pretrained(path, use_cache=False)
@@ -207,28 +217,28 @@ if __name__ == '__main__':
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-newsroom')
-    if args.dataset == 'multi-news':
+    elif args.dataset == 'multi-news':
         if args.peg:
             path = 'google/pegasus-multi_news'
             summ = PegasusForConditionalGeneration.from_pretrained(path, use_cache=False)
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-multi-news')
-    if args.dataset == 'billsum':
+    elif args.dataset == 'billsum':
         if args.peg:
             path = 'google/pegasus-billsum'
             summ = PegasusForConditionalGeneration.from_pretrained(path, use_cache=False)
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-billsum')
-    if args.dataset == 'reddit':
+    elif args.dataset == 'reddit':
         if args.peg:
             path = 'google/pegasus-reddit_tifu'
             summ = PegasusForConditionalGeneration.from_pretrained(path, use_cache=False)
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-reddit_tifu')
-    if args.dataset == 'wikihow':
+    elif args.dataset == 'wikihow':
         if args.peg:
             path = 'google/pegasus-wikihow'
             summ = PegasusForConditionalGeneration.from_pretrained(path, use_cache=False)
@@ -242,14 +252,19 @@ if __name__ == '__main__':
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-arxiv')
-    if args.dataset == 'pubmed':
+    elif args.dataset == 'pubmed':
         if args.peg:
             path = 'google/pegasus-pubmed'
             summ = PegasusForConditionalGeneration.from_pretrained(path, use_cache=False)
             if not args.train:
                 summ_use = PegasusForConditionalGeneration.from_pretrained(path)
             tokenizer = PegasusTokenizer.from_pretrained('google/pegasus-pubmed')
-
+    else:
+        path = 'google/mt5-small'
+        summ = MT5ForConditionalGeneration.from_pretrained(path, use_cache=False)
+        if not args.train:
+            summ_use = MT5ForConditionalGeneration.from_pretrained(path)
+        tokenizer = MT5Tokenizer.from_pretrained(path)
 
     if args.train:
         a = TrainPreAtt(summ, tokenizer, args.ckpt, args.epoch, args.batch_size, args.dataset, args.peg)

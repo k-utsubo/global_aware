@@ -33,8 +33,10 @@ class TrainPreAtt(object):
 
         # lr = get_cosine_schedule_with_warmup(torch.optim.Adam, 50000, 100000)
         # self.optimizer = torch.optim.Adam(self.pre_att_model.parameters())
-
-        self.device = torch.device('cuda')
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        else:
+            self.device = torch.device("cpu")
         # self.pos = positional_encoding(2000, 1024).to(self.device)
         self.parallel_loss.to(self.device)
 
